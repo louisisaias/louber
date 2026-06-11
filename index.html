@@ -296,8 +296,9 @@
         <button class="chip" onclick="pick('Escola')">🏫 Escola</button>
         <button class="chip" onclick="pick('Centro Comercial')">🛍️ Centro Comercial</button>
         <button class="chip" onclick="pick('Casa da Avó')">👵 Casa da Avó</button>
-        <button class="chip" onclick="pick('Treino')">⚽ Treino</button>
+        <button class="chip" onclick="pick('Treino')">⚽ Bhout</button>
         <button class="chip" onclick="pick('Casa de uma amiga')">🏠 Casa de uma amiga</button>
+        <button class="chip" onclick="pick('Capa')">Capa</button>
       </div>
       <button class="btn coral" onclick="goTiers()">Pedir boleia</button>
     </div>
@@ -320,7 +321,7 @@
     <div class="searching">
       <div class="radar">🔎</div>
       <div class="search-status" id="searchTxt">A contactar todos os motoristas da rede…</div>
-      <div class="search-sub">Rede LOUBER · cobertura total do sofá à garagem</div>
+      <div class="search-sub">Rede LOUBER · cobertura total da carrinha ao sofá</div>
       <div class="sent-badge" id="sentBadge">📡 Pedido enviado para o telemóvel do motorista!</div>
     </div>
   </div>
@@ -337,7 +338,7 @@
           <div class="driver-name">Louis</div>
           <div class="driver-meta">
             <span class="stars">★ <span id="drvRating">4.3</span></span> · 9.847 viagens em família<br>
-            "O carro do costume" · cheirinho a tabaco e baunilha
+            "O carro do costume" · cheirinho a Tabaco e baunilha
           </div>
         </div>
         <div class="plate">PA·PA·01</div>
@@ -431,16 +432,20 @@
   ];
 
   /* ---------- NOTIFICAÇÕES REAIS (ntfy.sh) ---------- */
+  // Publica via JSON: os headers HTTP não aceitam emojis (UTF-8),
+  // mas o corpo JSON aceita — por isso título e mensagem vão no body.
+  const PRIO = { urgent:5, high:4, default:3, low:2 };
   async function sendNtfy(title, body, tags, priority){
     try{
-      const r = await fetch('https://ntfy.sh/' + CONFIG.NTFY_TOPIC, {
+      const r = await fetch('https://ntfy.sh', {
         method:'POST',
-        body: body,
-        headers:{
-          'Title': title,
-          'Tags': tags || 'car',
-          'Priority': priority || 'high',
-        }
+        body: JSON.stringify({
+          topic: CONFIG.NTFY_TOPIC,
+          title: title,
+          message: body,
+          tags: (tags || 'car').split(','),
+          priority: PRIO[priority] || 4
+        })
       });
       return r.ok;
     }catch(e){
