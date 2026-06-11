@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#12161F">
+<title>LOUBER — O único motorista és tu</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12161F;
+    --paper:#FFFFFF;
+    --coral:#FF5A4E;
+    --mint:#2EC4B6;
+    --sun:#FFC53D;
+    --fog:#F2F1EC;
+    --line:#E4E2DB;
+    --radius:22px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Sora',sans-serif;
+    background:#D8D5CC;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+  }
+  .phone{
+    width:100%;max-width:420px;height:100vh;max-height:880px;
+    background:var(--fog);
+    position:relative;overflow:hidden;
+    display:flex;flex-direction:column;
+    box-shadow:0 30px 80px rgba(0,0,0,.35);
+  }
+  @media(min-width:440px){.phone{border-radius:40px;height:92vh;}}
+
+  /* ---------- MAPA ---------- */
+  .map{
+    position:absolute;inset:0;
+    background:
+      radial-gradient(circle at 70% 20%, #E9E6DC 0%, transparent 40%),
+      var(--fog);
+    overflow:hidden;
+  }
+  .map svg{position:absolute;inset:0;width:100%;height:100%;}
+  .car{
+    position:absolute;font-size:34px;
+    transform:translate(-50%,-50%) scaleX(-1);
+    filter:drop-shadow(0 6px 8px rgba(0,0,0,.25));
+    transition:left 1.2s linear, top 1.2s linear;
+    z-index:2;
+  }
+  .pin{
+    position:absolute;font-size:30px;transform:translate(-50%,-90%);z-index:2;
+  }
+  .pulse{
+    position:absolute;width:120px;height:120px;border-radius:50%;
+    border:3px solid var(--coral);transform:translate(-50%,-50%);
+    animation:pulse 1.8s ease-out infinite;opacity:0;z-index:1;
+  }
+  @keyframes pulse{0%{transform:translate(-50%,-50%) scale(.2);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.4);opacity:0}}
+
+  /* ---------- ESTRUTURA DE ECRÃS ---------- */
+  .screen{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    opacity:0;pointer-events:none;transition:opacity .35s ease;
+    z-index:5;
+  }
+  .screen.active{opacity:1;pointer-events:auto;}
+
+  .sheet{
+    margin-top:auto;background:var(--paper);
+    border-radius:var(--radius) var(--radius) 0 0;
+    padding:22px 20px calc(22px + env(safe-area-inset-bottom));
+    box-shadow:0 -12px 40px rgba(18,22,31,.14);
+    max-height:78%;overflow-y:auto;
+  }
+  .grab{width:42px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 16px;}
+
+  h1.logo{
+    font-family:'Unbounded',sans-serif;font-weight:900;font-size:26px;
+    letter-spacing:-.5px;color:var(--ink);
+  }
+  h1.logo span{color:var(--coral);}
+  .tagline{font-size:12px;color:#8B887F;margin-top:2px;}
+
+  .topbar{
+    position:relative;z-index:6;
+    padding:calc(18px + env(safe-area-inset-top)) 20px 14px;
+    display:flex;align-items:flex-start;justify-content:space-between;
+  }
+  .badge-frota{
+    background:var(--ink);color:#fff;font-size:11px;font-weight:600;
+    padding:8px 12px;border-radius:30px;display:flex;align-items:center;gap:6px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--mint);animation:blink 1.4s infinite;}
+  @keyframes blink{50%{opacity:.3}}
+
+  h2{font-family:'Unbounded',sans-serif;font-weight:700;font-size:18px;color:var(--ink);margin-bottom:4px;}
+  .sub{font-size:13px;color:#8B887F;margin-bottom:18px;}
+
+  .input{
+    display:flex;align-items:center;gap:12px;
+    background:var(--fog);border-radius:14px;padding:15px 16px;
+    font-size:15px;font-weight:600;color:var(--ink);
+    border:2px solid transparent;cursor:pointer;margin-bottom:14px;
+  }
+  .input:focus-within{border-color:var(--ink);}
+  .input input{border:0;background:transparent;outline:0;font:inherit;width:100%;color:var(--ink);}
+  .input input::placeholder{color:#A9A69C;font-weight:400;}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .chip{
+    background:var(--paper);border:1.5px solid var(--line);border-radius:30px;
+    padding:9px 14px;font-size:13px;font-weight:600;color:var(--ink);
+    cursor:pointer;transition:.15s;font-family:'Sora',sans-serif;
+  }
+  .chip:active{transform:scale(.95);}
+  .chip:hover{border-color:var(--ink);}
+  .chip.sel{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  .label-mini{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#A9A69C;margin:14px 0 8px;}
+
+  .btn{
+    width:100%;border:0;border-radius:16px;padding:17px;
+    font-family:'Sora',sans-serif;font-size:15px;font-weight:700;
+    background:var(--ink);color:#fff;cursor:pointer;margin-top:14px;
+    transition:transform .1s;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.coral{background:var(--coral);}
+  .btn.whats{background:#25D366;}
+  .btn.ghost{background:transparent;color:#8B887F;font-weight:600;padding:12px;margin-top:4px;}
+  .btn:disabled{opacity:.4;}
+
+  /* ---------- OPÇÕES DE VIAGEM ---------- */
+  .tier{
+    display:flex;align-items:center;gap:14px;
+    border:2px solid var(--line);border-radius:16px;padding:14px;
+    margin-bottom:10px;cursor:pointer;transition:.15s;background:var(--paper);
+  }
+  .tier.sel{border-color:var(--ink);background:var(--fog);}
+  .tier .emoji{font-size:30px;}
+  .tier .info{flex:1;}
+  .tier .name{font-weight:700;font-size:15px;color:var(--ink);}
+  .tier .desc{font-size:12px;color:#8B887F;margin-top:2px;}
+  .tier .price{font-weight:700;font-size:13px;color:var(--ink);white-space:nowrap;}
+
+  /* ---------- PROCURA ---------- */
+  .searching{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:30px;position:relative;z-index:6;
+  }
+  .radar{
+    width:110px;height:110px;border-radius:50%;
+    border:4px solid var(--ink);display:flex;align-items:center;justify-content:center;
+    font-size:46px;margin-bottom:24px;position:relative;background:var(--paper);
+  }
+  .radar::after{
+    content:'';position:absolute;inset:-14px;border-radius:50%;
+    border:3px dashed var(--coral);animation:spin 3s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .search-status{font-family:'Unbounded';font-weight:700;font-size:16px;color:var(--ink);min-height:48px;}
+  .search-sub{font-size:13px;color:#8B887F;margin-top:8px;}
+  .sent-badge{
+    margin-top:18px;background:var(--mint);color:#fff;font-size:12px;font-weight:700;
+    padding:10px 16px;border-radius:30px;display:none;
+  }
+  .sent-badge.show{display:inline-block;}
+  .sent-badge.fail{background:var(--coral);}
+
+  /* ---------- MOTORISTA ---------- */
+  .driver-card{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+  .avatar{
+    width:64px;height:64px;border-radius:50%;background:var(--sun);
+    display:flex;align-items:center;justify-content:center;font-size:34px;
+    border:3px solid var(--ink);flex-shrink:0;
+  }
+  .driver-info{flex:1;}
+  .driver-name{font-family:'Unbounded';font-weight:700;font-size:17px;color:var(--ink);}
+  .driver-meta{font-size:12px;color:#8B887F;margin-top:3px;line-height:1.5;}
+  .stars{color:var(--sun);font-weight:700;}
+  .plate{
+    background:var(--ink);color:#fff;font-family:'Unbounded';font-weight:700;
+    font-size:13px;padding:8px 12px;border-radius:8px;letter-spacing:2px;
+  }
+  .eta-box{
+    background:var(--fog);border-radius:14px;padding:14px 16px;margin-bottom:14px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .eta-box .label{font-size:12px;color:#8B887F;}
+  .eta-box .val{font-weight:700;font-size:14px;color:var(--ink);text-align:right;}
+
+  /* ---------- CHAT ---------- */
+  .chat{max-height:150px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:8px;}
+  .msg{max-width:80%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.4;}
+  .msg.me{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;}
+  .msg.driver{align-self:flex-start;background:var(--fog);color:var(--ink);border-bottom-left-radius:4px;}
+  .quick{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;}
+  .quick .chip{flex-shrink:0;}
+
+  /* ---------- VIAGEM ---------- */
+  .trip-status{
+    font-family:'Unbounded';font-weight:700;font-size:15px;color:var(--ink);
+    min-height:44px;display:flex;align-items:center;
+  }
+  .progress{height:8px;border-radius:4px;background:var(--fog);overflow:hidden;margin:12px 0 16px;}
+  .progress>div{height:100%;width:0%;background:var(--coral);border-radius:4px;transition:width .8s ease;}
+
+  /* ---------- AVALIAÇÃO ---------- */
+  .rate-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;position:relative;z-index:6;background:var(--paper);overflow-y:auto;}
+  .big-stars{font-size:40px;display:flex;gap:6px;margin:18px 0;}
+  .big-stars span{cursor:pointer;filter:grayscale(1);opacity:.35;transition:.15s;}
+  .big-stars span.on{filter:none;opacity:1;transform:scale(1.1);}
+  .tags{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:8px 0 4px;}
+  .tag{
+    border:1.5px solid var(--line);border-radius:30px;padding:8px 14px;
+    font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;background:var(--paper);
+    font-family:'Sora',sans-serif;
+  }
+  .tag.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .receipt{font-size:12px;color:#8B887F;margin-top:14px;line-height:1.7;}
+
+  .toast{
+    position:absolute;top:calc(20px + env(safe-area-inset-top));left:50%;
+    transform:translate(-50%,-80px);background:var(--ink);color:#fff;
+    padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;
+    z-index:50;transition:transform .4s cubic-bezier(.2,1.4,.4,1);max-width:88%;text-align:center;
+  }
+  .toast.show{transform:translate(-50%,0);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none!important;transition:none!important;}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- MAPA DE FUNDO -->
+  <div class="map" aria-hidden="true">
+    <svg viewBox="0 0 420 880" preserveAspectRatio="xMidYMid slice">
+      <g stroke="#DBD8CE" stroke-width="14" fill="none" stroke-linecap="round">
+        <path d="M-20 200 H440"/><path d="M-20 420 H440"/><path d="M-20 640 H440"/>
+        <path d="M100 -20 V900"/><path d="M250 -20 V900"/><path d="M370 -20 V900"/>
+      </g>
+      <g stroke="#fff" stroke-width="3" stroke-dasharray="14 16" fill="none">
+        <path d="M-20 200 H440"/><path d="M-20 420 H440"/><path d="M-20 640 H440"/>
+        <path d="M100 -20 V900"/><path d="M250 -20 V900"/><path d="M370 -20 V900"/>
+      </g>
+      <g fill="#E6E3D8">
+        <rect x="130" y="240" width="90" height="140" rx="10"/>
+        <rect x="280" y="460" width="70" height="140" rx="10"/>
+        <rect x="20" y="460" width="60" height="130" rx="10"/>
+        <rect x="130" y="680" width="100" height="120" rx="10"/>
+        <rect x="280" y="60" width="70" height="100" rx="10"/>
+      </g>
+      <g font-size="11" fill="#A9A69C" font-family="Sora">
+        <text x="138" y="310">Rua do Sofá</text>
+        <text x="288" y="525">Av. Frigorífico</text>
+        <text x="26" y="525">Lg. Pantufas</text>
+      </g>
+    </svg>
+    <div class="pulse" id="pulse" style="left:50%;top:42%;display:none"></div>
+    <div class="pin" id="pinDest" style="left:78%;top:24%;display:none">📍</div>
+    <div class="car" id="car" style="left:30%;top:62%">🚗</div>
+  </div>
+
+  <!-- BARRA SUPERIOR -->
+  <div class="topbar">
+    <div>
+      <h1 class="logo">LOU<span>BER</span></h1>
+      <div class="tagline">Boleias premium desde sempre</div>
+    </div>
+    <div class="badge-frota"><div class="dot"></div><span id="fleet">Frota: 1/1 online</span></div>
+  </div>
+
+  <!-- ECRÃ 1 · HOME -->
+  <div class="screen active" id="s-home">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h2>Para onde, passageira VIP?</h2>
+      <p class="sub">Temos <strong>1 motorista</strong> disponível. É sempre o mesmo. Não há surpresas.</p>
+
+      <div class="label-mini">Quem és tu?</div>
+      <div class="chips" id="whoChips"></div>
+
+      <div class="label-mini">Destino</div>
+      <div class="input">🔍 <input id="dest" placeholder="Escreve o destino…" autocomplete="off"></div>
+      <div class="chips">
+        <button class="chip" onclick="pick('Escola')">🏫 Escola</button>
+        <button class="chip" onclick="pick('Centro Comercial')">🛍️ Centro Comercial</button>
+        <button class="chip" onclick="pick('Casa da Avó')">👵 Casa da Avó</button>
+        <button class="chip" onclick="pick('Treino')">⚽ Treino</button>
+        <button class="chip" onclick="pick('Casa de uma amiga')">🏠 Casa de uma amiga</button>
+      </div>
+      <button class="btn coral" onclick="goTiers()">Pedir boleia</button>
+    </div>
+  </div>
+
+  <!-- ECRÃ 2 · ESCOLHER GAMA -->
+  <div class="screen" id="s-tiers">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h2>Escolhe a tua gama</h2>
+      <p class="sub">Spoiler: o motorista e o carro são iguais em todas.</p>
+      <div id="tierList"></div>
+      <button class="btn" onclick="goSearch()">Confirmar LOUBER</button>
+      <button class="btn ghost" onclick="show('s-home')">← Voltar</button>
+    </div>
+  </div>
+
+  <!-- ECRÃ 3 · A PROCURAR -->
+  <div class="screen" id="s-search">
+    <div class="searching">
+      <div class="radar">🔎</div>
+      <div class="search-status" id="searchTxt">A contactar todos os motoristas da rede…</div>
+      <div class="search-sub">Rede LOUBER · cobertura total do sofá à garagem</div>
+      <div class="sent-badge" id="sentBadge">📡 Pedido enviado para o telemóvel do motorista!</div>
+    </div>
+  </div>
+
+  <!-- ECRÃ 4 · MOTORISTA ENCONTRADO -->
+  <div class="screen" id="s-driver">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h2>Motorista encontrado! 🎉</h2>
+      <p class="sub">Incrível. Quais eram as probabilidades? (Eram 100%.)</p>
+      <div class="driver-card">
+        <div class="avatar">🧔</div>
+        <div class="driver-info">
+          <div class="driver-name">Louis</div>
+          <div class="driver-meta">
+            <span class="stars">★ <span id="drvRating">4.3</span></span> · 9.847 viagens em família<br>
+            "O carro do costume" · cheirinho a ambientador de pinheiro
+          </div>
+        </div>
+        <div class="plate">PA·PA·01</div>
+      </div>
+      <div class="eta-box">
+        <div>
+          <div class="label">Chegada estimada</div>
+          <div class="val" id="etaVal">Depende de quando acabar o café ☕</div>
+        </div>
+      </div>
+      <div class="chat" id="chat"></div>
+      <div class="quick">
+        <button class="chip" onclick="say('Estás a chegar? 🙄')">Estás a chegar? 🙄</button>
+        <button class="chip" onclick="say('Despacha-te!!')">Despacha-te!!</button>
+        <button class="chip" onclick="say('Trazes-me um lanche? 🥐')">Trazes-me um lanche? 🥐</button>
+        <button class="chip" onclick="say('Amo-te ❤️')">Amo-te ❤️</button>
+      </div>
+      <button class="btn whats" onclick="sendWhatsApp()">📲 Reforçar pedido por WhatsApp</button>
+      <button class="btn coral" onclick="startTrip()">O motorista chegou — Entrar 🚗</button>
+    </div>
+  </div>
+
+  <!-- ECRÃ 5 · EM VIAGEM -->
+  <div class="screen" id="s-trip">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h2>Em viagem para <span id="tripDest">o destino</span></h2>
+      <div class="trip-status" id="tripStatus">A apertar os cintos…</div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="eta-box">
+        <div><div class="label">Regras a bordo</div>
+        <div class="val">O DJ é o motorista. Reclamações: caixa fechada.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ECRÃ 6 · AVALIAÇÃO -->
+  <div class="screen" id="s-rate">
+    <div class="rate-wrap">
+      <h2>Chegámos! Avalia o Louis</h2>
+      <p class="sub">A tua opinião é muito importante e será ignorada com carinho.</p>
+      <div class="big-stars" id="bigStars">
+        <span data-v="1">⭐</span><span data-v="2">⭐</span><span data-v="3">⭐</span><span data-v="4">⭐</span><span data-v="5">⭐</span>
+      </div>
+      <div class="tags" id="tags">
+        <button class="tag">🎵 Música duvidosa</button>
+        <button class="tag">👴 Conduz como um avô</button>
+        <button class="tag">🗣️ Fala demais</button>
+        <button class="tag">😴 Quase adormeci (bom sinal)</button>
+        <button class="tag">🏆 Melhor pai/marido</button>
+        <button class="tag">⛽ Desviou-se p/ meter gasolina</button>
+      </div>
+      <div class="receipt" id="receipt"></div>
+      <button class="btn" onclick="finishRating()">Enviar avaliação</button>
+      <button class="btn ghost" onclick="resetApp()">Pedir nova boleia</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+  /* ============================================================
+     ⚙️ CONFIGURAÇÃO — EDITA AQUI ANTES DE PUBLICAR
+     ============================================================ */
+  const CONFIG = {
+    // Tópico secreto no ntfy.sh — muda para algo único e difícil
+    // de adivinhar. Depois instala a app "ntfy" no TEU telemóvel
+    // e subscreve este mesmo tópico para receberes os pedidos.
+    NTFY_TOPIC: 'louber-louis-MUDA-ISTO-x7k2m9',
+
+    // O TEU número de WhatsApp em formato internacional, sem '+'
+    // nem espaços. Ex.: Portugal → '351912345678'
+    WHATSAPP_NUMBER: '351900000000',
+
+    // As tuas passageiras (nome + emoji)
+    PASSENGERS: [
+      { name: 'Esposa', emoji: '👩' },
+      { name: 'Filha',  emoji: '👧' },
+    ],
+  };
+  /* ============================================================ */
+
+  const $ = id => document.getElementById(id);
+  let destination = '', tier = 0, rating = 0, who = 0;
+
+  const tiers = [
+    {e:'🚗', n:'Louis X',       d:'O clássico. Banco de trás, perguntas sobre a escola incluídas.', p:'2 beijinhos'},
+    {e:'😎', n:'Louis Comfort', d:'Banco da frente + direito a escolher 1 (uma) música.',           p:'1 abraço grande'},
+    {e:'👑', n:'Louis Black',   d:'Paragem na pastelaria incluída. Sujeito a humor do motorista.',  p:'3 beijinhos + arrumar o quarto'},
+  ];
+
+  /* ---------- NOTIFICAÇÕES REAIS (ntfy.sh) ---------- */
+  async function sendNtfy(title, body, tags, priority){
+    try{
+      const r = await fetch('https://ntfy.sh/' + CONFIG.NTFY_TOPIC, {
+        method:'POST',
+        body: body,
+        headers:{
+          'Title': title,
+          'Tags': tags || 'car',
+          'Priority': priority || 'high',
+        }
+      });
+      return r.ok;
+    }catch(e){
+      return false;
+    }
+  }
+
+  function passengerName(){ return CONFIG.PASSENGERS[who].name; }
+
+  /* ---------- WHATSAPP ---------- */
+  function sendWhatsApp(){
+    const txt = encodeURIComponent(
+      `🚕 PEDIDO LOUBER\n` +
+      `Passageira: ${passengerName()}\n` +
+      `Destino: ${destination}\n` +
+      `Gama: ${tiers[tier].n} (${tiers[tier].p})\n` +
+      `Despacha-te. 😄`
+    );
+    window.open(`https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${txt}`, '_blank');
+  }
+
+  /* ---------- UI ---------- */
+  function renderWho(){
+    $('whoChips').innerHTML = CONFIG.PASSENGERS.map((p,i)=>
+      `<button class="chip ${i===who?'sel':''}" onclick="selWho(${i})">${p.emoji} ${p.name}</button>`
+    ).join('');
+  }
+  function selWho(i){ who=i; renderWho(); }
+
+  function renderTiers(){
+    $('tierList').innerHTML = tiers.map((t,i)=>`
+      <div class="tier ${i===tier?'sel':''}" onclick="selTier(${i})">
+        <div class="emoji">${t.e}</div>
+        <div class="info"><div class="name">${t.n}</div><div class="desc">${t.d}</div></div>
+        <div class="price">${t.p}</div>
+      </div>`).join('');
+  }
+  function selTier(i){ tier=i; renderTiers(); }
+
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    $(id).classList.add('active');
+  }
+
+  function toast(t){
+    const el=$('toast'); el.textContent=t; el.classList.add('show');
+    setTimeout(()=>el.classList.remove('show'), 2800);
+  }
+
+  function pick(p){ $('dest').value=p; }
+
+  function goTiers(){
+    destination = $('dest').value.trim() || 'Algures (logo se vê)';
+    renderTiers();
+    show('s-tiers');
+  }
+
+  const searchSteps = [
+    'A contactar todos os motoristas da rede…',
+    'Encontrados: 1 motorista. 🤏',
+    'A analisar candidatos… (foi rápido)',
+    'A acordar o motorista do sofá… 🛋️',
+    'A negociar com o motorista… ele aceitou! (não tinha alternativa)'
+  ];
+
+  function goSearch(){
+    show('s-search');
+    $('pulse').style.display='block';
+    const badge = $('sentBadge');
+    badge.classList.remove('show','fail');
+
+    // 🔔 envia o pedido REAL para o telemóvel do motorista
+    sendNtfy(
+      `🚕 Pedido LOUBER de ${passengerName()}`,
+      `Destino: ${destination}\nGama: ${tiers[tier].n} (${tiers[tier].p})\nEla está à espera. Boa sorte. 😄`,
+      'taxi,rotating_light',
+      'urgent'
+    ).then(ok=>{
+      badge.textContent = ok
+        ? '📡 Pedido enviado para o telemóvel do motorista!'
+        : '📵 Sem rede — usa o botão de WhatsApp no próximo ecrã!';
+      if(!ok) badge.classList.add('fail');
+      badge.classList.add('show');
+    });
+
+    let i=0;
+    const int = setInterval(()=>{
+      i++;
+      if(i<searchSteps.length){ $('searchTxt').textContent = searchSteps[i]; }
+      else{
+        clearInterval(int);
+        $('pulse').style.display='none';
+        $('chat').innerHTML='';
+        addMsg('driver','Olá! Sou o teu motorista. Outra vez. 👋');
+        show('s-driver');
+      }
+    }, 1400);
+  }
+
+  function addMsg(who, txt){
+    const m=document.createElement('div');
+    m.className='msg '+who; m.textContent=txt;
+    $('chat').appendChild(m);
+    $('chat').scrollTop = $('chat').scrollHeight;
+  }
+
+  const replies = {
+    'Estás a chegar? 🙄':'Estou a 2 minutos.* (*minutos LOUBER, podem ser 15)',
+    'Despacha-te!!':'A velocidade do serviço varia conforme o tom do pedido. 😌',
+    'Trazes-me um lanche? 🥐':'Isso é no Louis Black. Faz upgrade. 💳',
+    'Amo-te ❤️':'Boleia desbloqueada com prioridade máxima. Também te amo. ❤️'
+  };
+  function say(t){
+    addMsg('me',t);
+    // 🔔 as mensagens também chegam ao motorista a sério
+    sendNtfy(`💬 ${passengerName()} (LOUBER)`, t, 'speech_balloon', 'high');
+    setTimeout(()=>addMsg('driver', replies[t] || 'Recebido. A caminho!'), 900);
+  }
+
+  const tripSteps = [
+    [5,  'A apertar os cintos… todos. Sim, todos.'],
+    [20, 'A sair da garagem (manobra de mestre).'],
+    [40, 'Motorista a contar a mesma história de sempre… 🗣️'],
+    [60, 'Paragem técnica: estava amarelo, juro.'],
+    [80, 'Quase lá. Preparar o "obrigada paiii" à saída.'],
+    [100,'Chegámos ao destino! 🏁']
+  ];
+
+  function startTrip(){
+    $('tripDest').textContent = destination;
+    show('s-trip');
+    const car=$('car'), pin=$('pinDest');
+    pin.style.display='block';
+    const path=[[30,62],[40,48],[55,48],[60,33],[78,26]];
+    let p=0, s=0;
+    const mv=setInterval(()=>{
+      p++;
+      if(p<path.length){ car.style.left=path[p][0]+'%'; car.style.top=path[p][1]+'%'; }
+      else clearInterval(mv);
+    },1300);
+    const st=setInterval(()=>{
+      if(s<tripSteps.length){
+        $('bar').style.width = tripSteps[s][0]+'%';
+        $('tripStatus').textContent = tripSteps[s][1];
+        s++;
+      } else {
+        clearInterval(st);
+        buildReceipt();
+        show('s-rate');
+      }
+    },1500);
+  }
+
+  function buildReceipt(){
+    $('receipt').innerHTML =
+      `<strong>Recibo da viagem</strong><br>`+
+      `Passageira: ${passengerName()} · Destino: ${destination}<br>`+
+      `Gama: ${tiers[tier].n} · Total: ${tiers[tier].p}<br>`+
+      `Gorjeta sugerida: 1 "obrigada paiii" sincero. Pagamento na saída do carro. 😄`;
+  }
+
+  $('bigStars').addEventListener('click', e=>{
+    const v = e.target.dataset.v; if(!v) return;
+    rating = +v;
+    document.querySelectorAll('#bigStars span').forEach(s=>{
+      s.classList.toggle('on', +s.dataset.v <= rating);
+    });
+  });
+  $('tags').addEventListener('click', e=>{
+    if(e.target.classList.contains('tag')) e.target.classList.toggle('on');
+  });
+
+  function finishRating(){
+    if(!rating){ toast('Escolhe pelo menos uma estrela! O motorista esforçou-se. 🥹'); return; }
+    const tags = [...document.querySelectorAll('.tag.on')].map(t=>t.textContent).join(', ') || 'sem comentários';
+    // 🔔 a avaliação também chega ao motorista
+    sendNtfy(
+      `⭐ ${passengerName()} avaliou-te: ${rating}/5`,
+      `Tags: ${tags}`,
+      rating>=4 ? 'star,tada' : 'star,face_with_raised_eyebrow',
+      'default'
+    );
+    if(rating<=2){
+      toast('Avaliação registada. Próxima boleia: a pé. 🚶‍♀️😄');
+    } else if(rating===5){
+      $('drvRating').textContent='4.4';
+      toast('5 estrelas! O motorista vai falar disto ao jantar durante semanas. ⭐');
+    } else {
+      toast('Obrigado! A avaliação foi enviada para a gerência (a mãe).');
+    }
+  }
+
+  function resetApp(){
+    rating=0; tier=0;
+    document.querySelectorAll('#bigStars span').forEach(s=>s.classList.remove('on'));
+    document.querySelectorAll('.tag').forEach(t=>t.classList.remove('on'));
+    $('dest').value='';
+    const car=$('car');
+    car.style.transition='none'; car.style.left='30%'; car.style.top='62%';
+    setTimeout(()=>car.style.transition='', 50);
+    $('pinDest').style.display='none';
+    $('bar').style.width='0%';
+    $('searchTxt').textContent=searchSteps[0];
+    show('s-home');
+  }
+
+  /* ---------- ARRANQUE ---------- */
+  renderWho();
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+</script>
+</body>
+</html>
