@@ -10,6 +10,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --ink:#12161F;
@@ -38,39 +40,22 @@
   }
   @media(min-width:440px){.phone{border-radius:40px;height:92vh;}}
 
-  /* ---------- MAPA ---------- */
-  .map{
-    position:absolute;inset:0;
-    background:
-      radial-gradient(circle at 70% 20%, #E9E6DC 0%, transparent 40%),
-      var(--fog);
-    overflow:hidden;
-  }
-  .map svg{position:absolute;inset:0;width:100%;height:100%;}
-  .car{
-    position:absolute;font-size:34px;
-    transform:translate(-50%,-50%) scaleX(-1);
-    filter:drop-shadow(0 6px 8px rgba(0,0,0,.25));
-    transition:left 1.2s linear, top 1.2s linear;
-    z-index:2;
-  }
-  .pin{
-    position:absolute;font-size:30px;transform:translate(-50%,-90%);z-index:2;
-  }
-  .pulse{
-    position:absolute;width:120px;height:120px;border-radius:50%;
-    border:3px solid var(--coral);transform:translate(-50%,-50%);
-    animation:pulse 1.8s ease-out infinite;opacity:0;z-index:1;
-  }
-  @keyframes pulse{0%{transform:translate(-50%,-50%) scale(.2);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.4);opacity:0}}
+  /* ---------- MAPA REAL (Leaflet) ---------- */
+  #lmap{position:absolute;inset:0;z-index:1;background:var(--fog);}
+  .leaflet-control-attribution{font-size:9px;opacity:.7;}
+  .emoji-marker{font-size:34px;filter:drop-shadow(0 5px 7px rgba(0,0,0,.3));line-height:1;}
 
   /* ---------- ESTRUTURA DE ECRÃS ---------- */
   .screen{
     position:absolute;inset:0;display:flex;flex-direction:column;
     opacity:0;pointer-events:none;transition:opacity .35s ease;
-    z-index:5;
+    z-index:1000;
   }
-  .screen.active{opacity:1;pointer-events:auto;}
+  .screen.active{opacity:1;}
+  /* o mapa fica interativo: só os painéis capturam toques */
+  .screen.active .sheet,
+  .screen.active .searching,
+  .screen.active .rate-wrap{pointer-events:auto;}
 
   .sheet{
     margin-top:auto;background:var(--paper);
@@ -89,16 +74,23 @@
   .tagline{font-size:12px;color:#8B887F;margin-top:2px;}
 
   .topbar{
-    position:relative;z-index:6;
+    position:absolute;top:0;left:0;right:0;z-index:1001;
     padding:calc(18px + env(safe-area-inset-top)) 20px 14px;
     display:flex;align-items:flex-start;justify-content:space-between;
+    pointer-events:none;
   }
+  .topbar > *{pointer-events:auto;}
+  .topbar-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
   .badge-frota{
     background:var(--ink);color:#fff;font-size:11px;font-weight:600;
     padding:8px 12px;border-radius:30px;display:flex;align-items:center;gap:6px;
   }
   .dot{width:8px;height:8px;border-radius:50%;background:var(--mint);animation:blink 1.4s infinite;}
   @keyframes blink{50%{opacity:.3}}
+  .drv-btn{
+    background:var(--paper);border:1.5px solid var(--line);border-radius:30px;
+    padding:6px 12px;font-size:16px;cursor:pointer;
+  }
 
   h2{font-family:'Unbounded',sans-serif;font-weight:700;font-size:18px;color:var(--ink);margin-bottom:4px;}
   .sub{font-size:13px;color:#8B887F;margin-bottom:18px;}
@@ -133,6 +125,7 @@
   }
   .btn:active{transform:scale(.97);}
   .btn.coral{background:var(--coral);}
+  .btn.mint{background:var(--mint);}
   .btn.whats{background:#25D366;}
   .btn.ghost{background:transparent;color:#8B887F;font-weight:600;padding:12px;margin-top:4px;}
   .btn:disabled{opacity:.4;}
@@ -153,7 +146,8 @@
   /* ---------- PROCURA ---------- */
   .searching{
     flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;padding:30px;position:relative;z-index:6;
+    text-align:center;padding:30px;position:relative;
+    background:rgba(242,241,236,.92);backdrop-filter:blur(4px);
   }
   .radar{
     width:110px;height:110px;border-radius:50%;
@@ -173,6 +167,11 @@
   }
   .sent-badge.show{display:inline-block;}
   .sent-badge.fail{background:var(--coral);}
+  .gps-badge{
+    margin-top:10px;background:var(--ink);color:#fff;font-size:11px;font-weight:600;
+    padding:8px 14px;border-radius:30px;display:none;
+  }
+  .gps-badge.show{display:inline-block;}
 
   /* ---------- MOTORISTA ---------- */
   .driver-card{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
@@ -201,8 +200,31 @@
   .msg{max-width:80%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.4;}
   .msg.me{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;}
   .msg.driver{align-self:flex-start;background:var(--fog);color:var(--ink);border-bottom-left-radius:4px;}
+  .msg.real{
+    align-self:flex-start;background:#E2F7F4;color:var(--ink);
+    border:1.5px solid var(--mint);border-bottom-left-radius:4px;
+  }
+  .msg.real::before{content:'✅ Louis (ao vivo)';display:block;font-size:10px;font-weight:700;color:var(--mint);margin-bottom:3px;}
   .quick{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;}
   .quick .chip{flex-shrink:0;}
+
+  /* ---------- MODO MOTORISTA ---------- */
+  .feed{
+    max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    margin-bottom:12px;
+  }
+  .feed-item{
+    background:var(--fog);border-radius:14px;padding:12px 14px;font-size:13px;
+    line-height:1.5;color:var(--ink);
+  }
+  .feed-item .when{font-size:10px;color:#A9A69C;font-weight:700;}
+  .feed-item.req{border-left:4px solid var(--coral);}
+  .feed-item.chatmsg{border-left:4px solid var(--ink);}
+  .feed-item a{color:var(--mint);font-weight:700;}
+  .feed-empty{font-size:13px;color:#A9A69C;text-align:center;padding:20px 0;}
+  .drv-row{display:flex;gap:8px;}
+  .drv-row .input{flex:1;margin-bottom:0;}
+  .drv-row .btn{width:auto;margin-top:0;padding:15px 18px;}
 
   /* ---------- VIAGEM ---------- */
   .trip-status{
@@ -213,7 +235,7 @@
   .progress>div{height:100%;width:0%;background:var(--coral);border-radius:4px;transition:width .8s ease;}
 
   /* ---------- AVALIAÇÃO ---------- */
-  .rate-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;position:relative;z-index:6;background:var(--paper);overflow-y:auto;}
+  .rate-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;position:relative;background:var(--paper);overflow-y:auto;}
   .big-stars{font-size:40px;display:flex;gap:6px;margin:18px 0;}
   .big-stars span{cursor:pointer;filter:grayscale(1);opacity:.35;transition:.15s;}
   .big-stars span.on{filter:none;opacity:1;transform:scale(1.1);}
@@ -230,7 +252,7 @@
     position:absolute;top:calc(20px + env(safe-area-inset-top));left:50%;
     transform:translate(-50%,-80px);background:var(--ink);color:#fff;
     padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;
-    z-index:50;transition:transform .4s cubic-bezier(.2,1.4,.4,1);max-width:88%;text-align:center;
+    z-index:1100;transition:transform .4s cubic-bezier(.2,1.4,.4,1);max-width:88%;text-align:center;
   }
   .toast.show{transform:translate(-50%,0);}
 
@@ -242,34 +264,8 @@
 <body>
 <div class="phone">
 
-  <!-- MAPA DE FUNDO -->
-  <div class="map" aria-hidden="true">
-    <svg viewBox="0 0 420 880" preserveAspectRatio="xMidYMid slice">
-      <g stroke="#DBD8CE" stroke-width="14" fill="none" stroke-linecap="round">
-        <path d="M-20 200 H440"/><path d="M-20 420 H440"/><path d="M-20 640 H440"/>
-        <path d="M100 -20 V900"/><path d="M250 -20 V900"/><path d="M370 -20 V900"/>
-      </g>
-      <g stroke="#fff" stroke-width="3" stroke-dasharray="14 16" fill="none">
-        <path d="M-20 200 H440"/><path d="M-20 420 H440"/><path d="M-20 640 H440"/>
-        <path d="M100 -20 V900"/><path d="M250 -20 V900"/><path d="M370 -20 V900"/>
-      </g>
-      <g fill="#E6E3D8">
-        <rect x="130" y="240" width="90" height="140" rx="10"/>
-        <rect x="280" y="460" width="70" height="140" rx="10"/>
-        <rect x="20" y="460" width="60" height="130" rx="10"/>
-        <rect x="130" y="680" width="100" height="120" rx="10"/>
-        <rect x="280" y="60" width="70" height="100" rx="10"/>
-      </g>
-      <g font-size="11" fill="#A9A69C" font-family="Sora">
-        <text x="138" y="310">Rua do Sofá</text>
-        <text x="288" y="525">Av. Frigorífico</text>
-        <text x="26" y="525">Lg. Pantufas</text>
-      </g>
-    </svg>
-    <div class="pulse" id="pulse" style="left:50%;top:42%;display:none"></div>
-    <div class="pin" id="pinDest" style="left:78%;top:24%;display:none">📍</div>
-    <div class="car" id="car" style="left:30%;top:62%">🚗</div>
-  </div>
+  <!-- MAPA REAL -->
+  <div id="lmap"></div>
 
   <!-- BARRA SUPERIOR -->
   <div class="topbar">
@@ -277,7 +273,10 @@
       <h1 class="logo">LOU<span>BER</span></h1>
       <div class="tagline">Boleias premium desde sempre</div>
     </div>
-    <div class="badge-frota"><div class="dot"></div><span id="fleet">Frota: 1/1 online</span></div>
+    <div class="topbar-right">
+      <div class="badge-frota"><div class="dot" id="busDot"></div><span id="fleet">Frota: 1/1 online</span></div>
+      <button class="drv-btn" onclick="driverGate()" title="Modo motorista">🛞</button>
+    </div>
   </div>
 
   <!-- ECRÃ 1 · HOME -->
@@ -322,6 +321,7 @@
       <div class="radar">🔎</div>
       <div class="search-status" id="searchTxt">A contactar todos os motoristas da rede…</div>
       <div class="search-sub">Rede LOUBER · cobertura total da carrinha ao sofá</div>
+      <div class="gps-badge" id="gpsBadge">📍 A obter a tua localização…</div>
       <div class="sent-badge" id="sentBadge">📡 Pedido enviado para o telemóvel do motorista!</div>
     </div>
   </div>
@@ -397,6 +397,32 @@
     </div>
   </div>
 
+  <!-- ECRÃ 7 · MODO MOTORISTA -->
+  <div class="screen" id="s-drv">
+    <div class="sheet">
+      <div class="grab"></div>
+      <h2>Central do Motorista 🛞</h2>
+      <p class="sub">Bem-vindo, Louis. A frota (tu) está operacional.</p>
+      <div class="label-mini">Pedidos e mensagens ao vivo</div>
+      <div class="feed" id="feed"><div class="feed-empty">Sem atividade recente. Aproveita a paz. ☕</div></div>
+      <div class="label-mini">Respostas rápidas</div>
+      <div class="quick">
+        <button class="chip" onclick="drvSay('Aceito! A caminho 🚗')">Aceito! A caminho 🚗</button>
+        <button class="chip" onclick="drvSay('Dá-me 5 minutos ⏱️')">5 minutos ⏱️</button>
+        <button class="chip" onclick="drvSay('Dá-me 10 minutos ⏱️')">10 minutos ⏱️</button>
+        <button class="chip" onclick="drvSay('Estou aí à porta, sai! 📣')">Estou à porta 📣</button>
+        <button class="chip" onclick="drvSay('Hoje não dá, desculpa 😅')">Hoje não dá 😅</button>
+      </div>
+      <div class="label-mini">Mensagem personalizada</div>
+      <div class="drv-row">
+        <div class="input">💬 <input id="drvMsg" placeholder="Escreve a tua resposta…"></div>
+        <button class="btn" onclick="drvSendCustom()">➤</button>
+      </div>
+      <button class="btn mint" onclick="drvShareLoc()">📍 Partilhar a minha posição</button>
+      <button class="btn ghost" onclick="show('s-home')">← Sair do modo motorista</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
@@ -419,11 +445,23 @@
       { name: 'Nani', emoji: '👩' },
       { name: 'Nono',  emoji: '👧' },
     ],
+
+    // PIN para entrar no modo motorista (botão 🛞 no canto)
+    DRIVER_PIN: '1234',
+
+    // Centro do mapa antes de obter GPS [latitude, longitude]
+    MAP_CENTER: [38.7223, -9.1393],
   };
   /* ============================================================ */
 
+  const BUS = CONFIG.NTFY_TOPIC + '-bus';   // canal app↔app (JSON)
+  const CLIENT = Math.random().toString(36).slice(2,10); // id desta sessão
+
   const $ = id => document.getElementById(id);
   let destination = '', tier = 0, rating = 0, who = 0;
+  let pickup = null;          // {lat, lon} da passageira
+  let isDriver = false;
+  let busLog = [];            // histórico para o feed do motorista
 
   const tiers = [
     {e:'🚗', n:'Louis X',       d:'O clássico. Banco de trás, perguntas sobre a escola incluídas.', p:'2 beijinhos'},
@@ -431,40 +469,193 @@
     {e:'👑', n:'Louis Black',   d:'Paragem na pastelaria incluída. Sujeito a humor do motorista.',  p:'3 beijinhos + arrumar o quarto'},
   ];
 
-  /* ---------- NOTIFICAÇÕES REAIS (ntfy.sh) ---------- */
-  // Publica via JSON: os headers HTTP não aceitam emojis (UTF-8),
-  // mas o corpo JSON aceita — por isso título e mensagem vão no body.
+  /* ---------- MAPA REAL (Leaflet + OpenStreetMap) ---------- */
+  let map, carMarker, pinMarker;
+  function emojiIcon(e, size){
+    return L.divIcon({
+      html:`<div class="emoji-marker" style="font-size:${size}px">${e}</div>`,
+      className:'', iconSize:[size,size], iconAnchor:[size/2,size/2]
+    });
+  }
+  function initMap(){
+    map = L.map('lmap', {zoomControl:false}).setView(CONFIG.MAP_CENTER, 14);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:19, attribution:'© OpenStreetMap'
+    }).addTo(map);
+    carMarker = L.marker(offset(CONFIG.MAP_CENTER, 0.004, -0.004), {icon:emojiIcon('🚗',34)}).addTo(map);
+    // centra no utilizador, se deixar
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(p=>{
+        const here=[p.coords.latitude, p.coords.longitude];
+        map.setView(here, 15);
+        carMarker.setLatLng(offset(here, 0.004, -0.004));
+      }, ()=>{}, {timeout:6000});
+    }
+  }
+  function offset(ll, dlat, dlon){ return [ll[0]+dlat, ll[1]+dlon]; }
+
+  function setPickupMarker(lat, lon){
+    if(pinMarker) map.removeLayer(pinMarker);
+    pinMarker = L.marker([lat,lon], {icon:emojiIcon('📍',30)}).addTo(map);
+    map.setView([lat,lon], 16);
+  }
+
+  /* ---------- GPS DE RECOLHA ---------- */
+  function getPickup(){
+    return new Promise(res=>{
+      if(!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(
+        p=>res({lat:+p.coords.latitude.toFixed(6), lon:+p.coords.longitude.toFixed(6)}),
+        ()=>res(null),
+        {enableHighAccuracy:true, timeout:8000}
+      );
+    });
+  }
+  const mapsLink = (lat,lon)=>`https://maps.google.com/?q=${lat},${lon}`;
+
+  /* ---------- NOTIFICAÇÕES PUSH (canal humano, ntfy app) ---------- */
   const PRIO = { urgent:5, high:4, default:3, low:2 };
-  async function sendNtfy(title, body, tags, priority){
+  async function sendNtfy(title, body, tags, priority, click){
     try{
-      const r = await fetch('https://ntfy.sh', {
-        method:'POST',
-        body: JSON.stringify({
-          topic: CONFIG.NTFY_TOPIC,
-          title: title,
-          message: body,
-          tags: (tags || 'car').split(','),
-          priority: PRIO[priority] || 4
-        })
-      });
+      const payload = {
+        topic: CONFIG.NTFY_TOPIC,
+        title: title,
+        message: body,
+        tags: (tags || 'car').split(','),
+        priority: PRIO[priority] || 4
+      };
+      if(click) payload.click = click; // abre o Google Maps ao tocar
+      const r = await fetch('https://ntfy.sh', {method:'POST', body: JSON.stringify(payload)});
       return r.ok;
-    }catch(e){
-      return false;
+    }catch(e){ return false; }
+  }
+
+  /* ---------- CANAL BIDIRECIONAL (bus app↔app) ---------- */
+  async function sendBus(obj){
+    obj.cid = CLIENT; obj.ts = Date.now();
+    try{
+      await fetch('https://ntfy.sh', {method:'POST', body: JSON.stringify({
+        topic: BUS, message: JSON.stringify(obj), priority: 3
+      })});
+    }catch(e){}
+  }
+
+  function startBus(){
+    const es = new EventSource('https://ntfy.sh/' + BUS + '/sse?since=2h');
+    es.onopen  = ()=>{ $('fleet').textContent = 'Frota: 1/1 online 📡'; };
+    es.onerror = ()=>{ $('fleet').textContent = 'Frota: a religar…'; };
+    es.onmessage = ev=>{
+      try{
+        const n = JSON.parse(ev.data);
+        const m = JSON.parse(n.message);
+        if(!m || m.cid === CLIENT) return; // ignora as próprias mensagens
+        handleBus(m);
+      }catch(e){}
+    };
+  }
+
+  function logFeed(m){
+    busLog.unshift(m);
+    busLog = busLog.slice(0, 30);
+    renderFeed();
+  }
+
+  function handleBus(m){
+    const old = (Date.now() - m.ts) > 2*60*60*1000;
+    if(m.type === 'request'){
+      logFeed(m);
+      if(isDriver && !old) toast(`🚕 Pedido de ${m.name}: ${m.dest}`);
+    }
+    else if(m.type === 'msg' && m.from === 'pax'){
+      logFeed(m);
+      if(isDriver && !old) toast(`💬 ${m.name}: ${m.text}`);
+    }
+    else if(m.type === 'msg' && m.from === 'driver'){
+      if(old) return;
+      addMsg('real', m.text);
+      $('etaVal').textContent = m.text;
+      toast('✅ Resposta do motorista: ' + m.text);
+    }
+    else if(m.type === 'loc' && m.from === 'driver'){
+      if(old) return;
+      carMarker.setLatLng([m.lat, m.lon]);
+      map.panTo([m.lat, m.lon]);
+      toast('🚗 O motorista partilhou a posição — olha o mapa!');
     }
   }
 
-  function passengerName(){ return CONFIG.PASSENGERS[who].name; }
+  /* ---------- MODO MOTORISTA ---------- */
+  function driverGate(){
+    if(isDriver){ show('s-drv'); return; }
+    const pin = prompt('PIN do motorista:');
+    if(pin === CONFIG.DRIVER_PIN){
+      isDriver = true;
+      renderFeed();
+      show('s-drv');
+      toast('Bem-vindo de volta, motorista ⭐4.3');
+    } else if(pin !== null){
+      toast('PIN errado. Só há UM motorista e não és tu. 😄');
+    }
+  }
+
+  function fmtTime(ts){
+    const d = new Date(ts);
+    return d.toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}) + ' ' +
+           d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'});
+  }
+
+  function renderFeed(){
+    if(!busLog.length){
+      $('feed').innerHTML = '<div class="feed-empty">Sem atividade recente. Aproveita a paz. ☕</div>';
+      return;
+    }
+    $('feed').innerHTML = busLog.map(m=>{
+      if(m.type === 'request'){
+        const loc = (m.lat && m.lon)
+          ? ` · <a href="${mapsLink(m.lat,m.lon)}" target="_blank" rel="noopener">📍 ver recolha no mapa</a>`
+          : ' · 📵 sem GPS';
+        return `<div class="feed-item req"><span class="when">${fmtTime(m.ts)}</span><br>
+          🚕 <strong>${m.name}</strong> pediu boleia para <strong>${m.dest}</strong> (${m.tier})${loc}</div>`;
+      }
+      if(m.type === 'msg'){
+        return `<div class="feed-item chatmsg"><span class="when">${fmtTime(m.ts)}</span><br>
+          💬 <strong>${m.name}</strong>: ${m.text}</div>`;
+      }
+      return '';
+    }).join('');
+  }
+
+  function drvSay(text){
+    sendBus({type:'msg', from:'driver', name:'Louis', text});
+    toast('Resposta enviada às passageiras 📨');
+  }
+  function drvSendCustom(){
+    const t = $('drvMsg').value.trim();
+    if(!t) return;
+    drvSay(t);
+    $('drvMsg').value='';
+  }
+  function drvShareLoc(){
+    toast('A obter a tua posição…');
+    getPickup().then(loc=>{
+      if(!loc){ toast('Não consegui obter o GPS 😕 — verifica as permissões.'); return; }
+      carMarker.setLatLng([loc.lat, loc.lon]);
+      map.panTo([loc.lat, loc.lon]);
+      sendBus({type:'loc', from:'driver', lat:loc.lat, lon:loc.lon});
+      toast('Posição partilhada — elas já te veem no mapa 🚗');
+    });
+  }
 
   /* ---------- WHATSAPP ---------- */
+  function passengerName(){ return CONFIG.PASSENGERS[who].name; }
   function sendWhatsApp(){
-    const txt = encodeURIComponent(
-      `🚕 PEDIDO LOUBER\n` +
+    let txt = `🚕 PEDIDO LOUBER\n` +
       `Passageira: ${passengerName()}\n` +
       `Destino: ${destination}\n` +
-      `Gama: ${tiers[tier].n} (${tiers[tier].p})\n` +
-      `Despacha-te. 😄`
-    );
-    window.open(`https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${txt}`, '_blank');
+      `Gama: ${tiers[tier].n} (${tiers[tier].p})\n`;
+    if(pickup) txt += `Recolha: ${mapsLink(pickup.lat, pickup.lon)}\n`;
+    txt += `Despacha-te. 😄`;
+    window.open(`https://wa.me/${CONFIG.WHATSAPP_NUMBER}?text=${encodeURIComponent(txt)}`, '_blank');
   }
 
   /* ---------- UI ---------- */
@@ -511,18 +702,43 @@
     'A negociar com o motorista… ele aceitou! (não tinha alternativa)'
   ];
 
-  function goSearch(){
+  async function goSearch(){
     show('s-search');
-    $('pulse').style.display='block';
-    const badge = $('sentBadge');
+    const badge = $('sentBadge'), gps = $('gpsBadge');
     badge.classList.remove('show','fail');
+    gps.textContent = '📍 A obter a tua localização…';
+    gps.classList.add('show');
 
-    // 🔔 envia o pedido REAL para o telemóvel do motorista
+    // animação da procura (corre em paralelo)
+    let i=0;
+    const int = setInterval(()=>{
+      i++;
+      if(i<searchSteps.length){ $('searchTxt').textContent = searchSteps[i]; }
+      else{
+        clearInterval(int);
+        $('chat').innerHTML='';
+        addMsg('driver','Olá! Sou o teu motorista. Outra vez. 👋');
+        show('s-driver');
+      }
+    }, 1400);
+
+    // 📍 GPS de recolha
+    pickup = await getPickup();
+    if(pickup){
+      gps.textContent = '📍 Localização de recolha incluída no pedido!';
+      setPickupMarker(pickup.lat, pickup.lon);
+    } else {
+      gps.textContent = '📵 Sem GPS — o motorista terá de adivinhar onde estás 😄';
+    }
+
+    // 🔔 pedido REAL: push para o telemóvel do motorista...
+    const locTxt = pickup ? `\n📍 Recolha: ${mapsLink(pickup.lat,pickup.lon)}` : '\n📵 Sem localização';
     sendNtfy(
       `🚕 Pedido LOUBER de ${passengerName()}`,
-      `Destino: ${destination}\nGama: ${tiers[tier].n} (${tiers[tier].p})\nEla está à espera. Boa sorte. 😄`,
+      `Destino: ${destination}\nGama: ${tiers[tier].n} (${tiers[tier].p})${locTxt}\nEla está à espera. Boa sorte. 😄`,
       'taxi,rotating_light',
-      'urgent'
+      'urgent',
+      pickup ? mapsLink(pickup.lat,pickup.lon) : undefined
     ).then(ok=>{
       badge.textContent = ok
         ? '📡 Pedido enviado para o telemóvel do motorista!'
@@ -531,23 +747,16 @@
       badge.classList.add('show');
     });
 
-    let i=0;
-    const int = setInterval(()=>{
-      i++;
-      if(i<searchSteps.length){ $('searchTxt').textContent = searchSteps[i]; }
-      else{
-        clearInterval(int);
-        $('pulse').style.display='none';
-        $('chat').innerHTML='';
-        addMsg('driver','Olá! Sou o teu motorista. Outra vez. 👋');
-        show('s-driver');
-      }
-    }, 1400);
+    // ...e para o canal app↔app (feed do modo motorista)
+    sendBus({
+      type:'request', name:passengerName(), dest:destination,
+      tier:tiers[tier].n, lat:pickup?.lat, lon:pickup?.lon
+    });
   }
 
-  function addMsg(who, txt){
+  function addMsg(cls, txt){
     const m=document.createElement('div');
-    m.className='msg '+who; m.textContent=txt;
+    m.className='msg '+cls; m.textContent=txt;
     $('chat').appendChild(m);
     $('chat').scrollTop = $('chat').scrollHeight;
   }
@@ -560,8 +769,9 @@
   };
   function say(t){
     addMsg('me',t);
-    // 🔔 as mensagens também chegam ao motorista a sério
+    // chega ao motorista: push no ntfy + feed do modo motorista
     sendNtfy(`💬 ${passengerName()} (LOUBER)`, t, 'speech_balloon', 'high');
+    sendBus({type:'msg', from:'pax', name:passengerName(), text:t});
     setTimeout(()=>addMsg('driver', replies[t] || 'Recebido. A caminho!'), 900);
   }
 
@@ -577,16 +787,22 @@
   function startTrip(){
     $('tripDest').textContent = destination;
     show('s-trip');
-    const car=$('car'), pin=$('pinDest');
-    pin.style.display='block';
-    const path=[[30,62],[40,48],[55,48],[60,33],[78,26]];
-    let p=0, s=0;
-    const mv=setInterval(()=>{
-      p++;
-      if(p<path.length){ car.style.left=path[p][0]+'%'; car.style.top=path[p][1]+'%'; }
-      else clearInterval(mv);
-    },1300);
-    const st=setInterval(()=>{
+
+    // animação do carro no mapa real: aproxima-se do ponto de recolha
+    const target = pickup ? [pickup.lat, pickup.lon] : map.getCenter();
+    const from = carMarker.getLatLng();
+    const steps = 8;
+    let k = 0;
+    const mv = setInterval(()=>{
+      k++;
+      const lat = from.lat + (target[0]-from.lat)*(k/steps);
+      const lon = from.lng + (target[1]-from.lng)*(k/steps);
+      carMarker.setLatLng([lat,lon]);
+      if(k>=steps) clearInterval(mv);
+    }, 1100);
+
+    let s = 0;
+    const st = setInterval(()=>{
       if(s<tripSteps.length){
         $('bar').style.width = tripSteps[s][0]+'%';
         $('tripStatus').textContent = tripSteps[s][1];
@@ -621,7 +837,6 @@
   function finishRating(){
     if(!rating){ toast('Escolhe pelo menos uma estrela! O motorista esforçou-se. 🥹'); return; }
     const tags = [...document.querySelectorAll('.tag.on')].map(t=>t.textContent).join(', ') || 'sem comentários';
-    // 🔔 a avaliação também chega ao motorista
     sendNtfy(
       `⭐ ${passengerName()} avaliou-te: ${rating}/5`,
       `Tags: ${tags}`,
@@ -639,14 +854,11 @@
   }
 
   function resetApp(){
-    rating=0; tier=0;
+    rating=0; tier=0; pickup=null;
     document.querySelectorAll('#bigStars span').forEach(s=>s.classList.remove('on'));
     document.querySelectorAll('.tag').forEach(t=>t.classList.remove('on'));
     $('dest').value='';
-    const car=$('car');
-    car.style.transition='none'; car.style.left='30%'; car.style.top='62%';
-    setTimeout(()=>car.style.transition='', 50);
-    $('pinDest').style.display='none';
+    if(pinMarker){ map.removeLayer(pinMarker); pinMarker=null; }
     $('bar').style.width='0%';
     $('searchTxt').textContent=searchSteps[0];
     show('s-home');
@@ -654,6 +866,8 @@
 
   /* ---------- ARRANQUE ---------- */
   renderWho();
+  initMap();
+  startBus();
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
